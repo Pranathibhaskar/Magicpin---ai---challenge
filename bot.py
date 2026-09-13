@@ -434,6 +434,20 @@ def compose_proactive_message(
             [merchant_name],
         )
 
+    if kind == "no_active_offers":
+        body = (
+            f"{merchant_name}, you currently have no active offers on your listing. "
+            f"A focused {category_name} offer could give customers a clearer reason to enquire. "
+            f"Want me to draft one you can review?"
+        )
+
+        return (
+            body,
+            "open_ended",
+            "vera_offer_gap_v1",
+            [merchant_name, category_name],
+        )
+
     # ---- Safe generic fallback ----
 
     body = (
