@@ -203,22 +203,48 @@ def compose_proactive_message(
     if kind == "research_digest":
         top_item = payload.get("top_item_id") or payload.get("headline")
 
-        if top_item:
-            body = (
-                f"{merchant_name}, I found a new {category_name}-relevant update "
-                f"that may be useful for your business: {top_item}. "
-                f"Want me to pull out the practical takeaway?"
+        # Look up the full research item from the category digest.
+        digest_item = None
+        for item in category.get("digest", []):
+            if item.get("id") == top_item:
+                digest_item = item
+                break
+
+        if digest_item:
+            title = digest_item.get("title")
+            source = digest_item.get("source")
+            actionable = digest_item.get("actionable")
+
+            body_parts = [f"{merchant_name}, {title}."]
+
+            if source:
+                body_parts.append(f"Source: {source}.")
+
+            if actionable:
+                body_parts.append(f"{actionable}.")
+
+            body_parts.append(
+                "Want me to pull out the practical takeaway for your clinic?"
             )
-        else:
-            body = (
-                f"{merchant_name}, there's a new {category_name}-relevant update "
-                f"worth a look. Want me to pull out the practical takeaway?"
+
+            body = " ".join(body_parts)
+
+            return (
+                body,
+                "open_ended",
+                "vera_research_digest_v2",
+                [merchant_name, str(title or top_item)],
             )
+
+        body = (
+            f"{merchant_name}, there's a new {category_name}-relevant update "
+            "worth a look. Want me to pull out the practical takeaway?"
+        )
 
         return (
             body,
             "open_ended",
-            "vera_research_digest_v1",
+            "vera_research_digest_v2",
             [merchant_name, str(top_item or category_name)],
         )
 
