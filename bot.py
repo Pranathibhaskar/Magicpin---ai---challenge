@@ -242,7 +242,8 @@ def compose_proactive_message(
                 body_parts.append(f"{actionable}.")
 
             body_parts.append(
-                "Want me to pull out the practical takeaway for your clinic?"
+                f"Want me to pull out the practical takeaway for your "
+                f"{category_name} business?"
             )
 
             body = " ".join(body_parts)
@@ -250,19 +251,20 @@ def compose_proactive_message(
             return (
                 body,
                 "open_ended",
-                "vera_research_digest_v2",
+                "vera_research_digest_v3",
                 [merchant_name, str(title or top_item)],
             )
 
         body = (
-            f"{merchant_name}, there's a new {category_name}-relevant update "
-            "worth a look. Want me to pull out the practical takeaway?"
+            f"{merchant_name}, there's a new update relevant to your "
+            f"{category_name} business. "
+            "Want me to pull out the practical takeaway?"
         )
 
         return (
             body,
             "open_ended",
-            "vera_research_digest_v2",
+            "vera_research_digest_v3",
             [merchant_name, str(top_item or category_name)],
         )
 
@@ -301,17 +303,38 @@ def compose_proactive_message(
         )
 
     if kind == "renewal_due":
+        payload = trigger.get("payload", {})
+        days_remaining = payload.get("days_remaining")
+        plan = payload.get("plan")
+        amount = payload.get("amount")
+
+        detail_parts = []
+
+        if plan:
+            detail_parts.append(f"{plan} plan")
+        if amount is not None:
+            detail_parts.append(f"₹{amount:,}")
+        if days_remaining is not None:
+            detail_parts.append(f"renews in {days_remaining} days")
+
+        if len(detail_parts) == 3:
+            detail_text = f"{detail_parts[0]} is ₹{amount:,} and {detail_parts[2]}"
+        elif detail_parts:
+            detail_text = " and ".join(detail_parts)
+        else:
+            detail_text = "renewal"
+
         body = (
-            f"{merchant_name}, your renewal is coming up. "
-            f"I can help you review what you're currently getting and the simplest next step. "
-            f"Want me to walk you through it?"
+            f"{merchant_name}, your {detail_text}. "
+            f"Before renewal, I'd review whether your current setup is still helping you generate enquiries. "
+            f"Want me to walk you through the key things to check?"
         )
 
         return (
             body,
             "open_ended",
-            "vera_renewal_due_v1",
-            [merchant_name],
+            "vera_renewal_due_v2",
+            [merchant_name, str(days_remaining), str(plan), str(amount)],
         )
 
     if kind in {"active_planning_intent", "join_intent", "campaign_intent"}:
