@@ -161,6 +161,28 @@ def humanize_kind(kind: str) -> str:
     return kind.replace("_", " ").strip().capitalize()
 
 
+def find_digest_item(category: dict[str, Any], item_id: str | None) -> dict[str, Any] | None:
+    """Find a category digest item across supported payload shapes."""
+    if not item_id or not isinstance(category, dict):
+        return None
+
+    digest = category.get("digest")
+    if digest is None and isinstance(category.get("category"), dict):
+        digest = category["category"].get("digest")
+
+    if isinstance(digest, dict):
+        digest = digest.get("items") or digest.get("digest") or []
+
+    if not isinstance(digest, list):
+        return None
+
+    for item in digest:
+        if isinstance(item, dict) and str(item.get("id")) == str(item_id):
+            return item
+
+    return None
+
+
 def compose_proactive_message(
     trigger: dict[str, Any],
     merchant: dict[str, Any],
@@ -204,11 +226,7 @@ def compose_proactive_message(
         top_item = payload.get("top_item_id") or payload.get("headline")
 
         # Look up the full research item from the category digest.
-        digest_item = None
-        for item in category.get("digest", []):
-            if item.get("id") == top_item:
-                digest_item = item
-                break
+        digest_item = find_digest_item(category, top_item)
 
         if digest_item:
             title = digest_item.get("title")
@@ -260,7 +278,7 @@ def compose_proactive_message(
                 f"{merchant_name}, calls are down {drop_pct:.0f}% this week — "
                 f"{calls} calls in the current 30-day window. "
                 "I'd start by fixing the offer gap first. "
-                "Want me to draft a dental offer you can review?"
+                f"Want me to draft a {category_name} offer you can review?"
             )
 
             return (
@@ -326,7 +344,37 @@ def compose_proactive_message(
         )
 
     if kind == "regulation_change":
-        headline = payload.get("headline") or payload.get("change") or "a regulatory update"
+        top_item_id = payload.get("top_item_id")
+        digest_item = find_digest_item(category, top_item_id)
+
+        if digest_item:
+            headline = digest_item.get("title") or "a regulatory update"
+            source = digest_item.get("source")
+            actionable = digest_item.get("actionable")
+
+            body_parts = [f"{merchant_name}, {headline}."]
+            if source:
+                body_parts.append(f"Source: {source}.")
+            if actionable:
+                body_parts.append(f"{actionable}.")
+            body_parts.append(
+                "Want me to summarize what actually matters for your clinic?"
+            )
+
+            body = " ".join(body_parts)
+
+            return (
+                body,
+                "open_ended",
+                "vera_regulation_update_v2",
+                [merchant_name, str(headline)],
+            )
+
+        headline = (
+            payload.get("headline")
+            or payload.get("change")
+            or "a regulatory update"
+        )
 
         body = (
             f"{merchant_name}, there's a new regulatory update that may affect "
@@ -337,7 +385,7 @@ def compose_proactive_message(
         return (
             body,
             "open_ended",
-            "vera_regulation_update_v1",
+            "vera_regulation_update_v2",
             [merchant_name, str(headline)],
         )
 
