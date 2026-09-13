@@ -52,9 +52,9 @@ async def metadata():
     return {
         "team_name": "Pranathi",
         "team_members": ["Pranathi"],
-        "model": "TBD",
-        "approach": "context-aware rule-based composer with LLM assistance",
-        "contact_email": "TBD",
+        "model": "deterministic",
+        "approach": "context-aware rule-based composer",
+        "contact_email": "pranathibhaskar1909@gmail.com",
         "version": "0.1.0",
         "submitted_at": datetime.now(timezone.utc).isoformat(),
     }
