@@ -203,9 +203,10 @@ def compose_proactive_message(
 
     category_name = (
         merchant.get("category_slug")
+        or category.get("display_name")
         or category.get("slug")
         or payload.get("category")
-        or "your category"
+        or "category"
     )
 
     # Common useful facts from merchant context.
@@ -443,6 +444,60 @@ def compose_proactive_message(
             [merchant_name, customer_name],
         )
 
+    if kind == "perf_spike":
+        metric = payload.get("metric")
+        delta_pct = payload.get("delta_pct")
+        window = payload.get("window")
+        vs_baseline = payload.get("vs_baseline")
+        likely_driver = payload.get("likely_driver")
+
+        metric_label = str(metric or "performance").replace("_", " ")
+        driver_label = str(likely_driver or "").replace("_", " ")
+
+        detail_parts = []
+
+        if delta_pct is not None:
+            try:
+                delta_value = float(delta_pct)
+                direction = "up" if delta_value >= 0 else "down"
+                detail_parts.append(
+                    f"{metric_label} are {direction} {abs(delta_value):.0%}"
+                )
+            except (TypeError, ValueError):
+                pass
+
+        if window:
+            detail_parts.append(f"over {window}")
+
+        if vs_baseline is not None:
+            detail_parts.append(f"versus a baseline of {vs_baseline}")
+
+        detail_text = " ".join(detail_parts)
+
+        body = f"{merchant_name}, {detail_text or 'your performance has picked up'}."
+
+        if driver_label:
+            body += f" The likely driver is {driver_label}."
+
+        body += (
+            f" I'd build on what is working while the signal is fresh. "
+            f"Want me to suggest the next step for your {category_name} business?"
+        )
+
+        return (
+            body,
+            "open_ended",
+            "vera_perf_spike_v1",
+            [
+                merchant_name,
+                metric_label,
+                str(delta_pct),
+                str(window),
+                str(vs_baseline),
+                driver_label,
+            ],
+        )
+
     if kind == "dormant_with_vera":
         body = (
             f"{merchant_name}, I spotted an opportunity worth revisiting. "
@@ -507,6 +562,117 @@ def compose_proactive_message(
             [merchant_name, str(theme), str(occurrences), str(trend)],
         )
 
+    if kind == "competitor_opened":
+        competitor_name = payload.get("competitor_name")
+        distance_km = payload.get("distance_km")
+        their_offer = payload.get("their_offer")
+        opened_date = payload.get("opened_date")
+
+        detail_parts = []
+
+        if competitor_name and distance_km is not None:
+            detail_parts.append(
+                f"{competitor_name} opened {distance_km} km away"
+            )
+        elif competitor_name:
+            detail_parts.append(f"{competitor_name} opened nearby")
+
+        if their_offer:
+            detail_parts.append(f"their current offer is {their_offer}")
+
+        if opened_date:
+            detail_parts.append(f"they opened on {opened_date}")
+
+        detail_text = ". ".join(detail_parts)
+
+        body = (
+            f"{merchant_name}, {detail_text}. "
+            f"That gives you a concrete competitive signal to review. "
+            f"Want me to suggest how your {category_name} listing could respond?"
+        )
+
+        return (
+            body,
+            "open_ended",
+            "vera_competitor_opened_v1",
+            [
+                merchant_name,
+                str(competitor_name),
+                str(distance_km),
+                str(their_offer),
+            ],
+        )
+
+    if kind == "category_seasonal":
+        season = payload.get("season")
+        trends = payload.get("trends") or []
+        shelf_action = payload.get("shelf_action_recommended")
+
+        trend_parts = []
+
+        if isinstance(trends, dict):
+            for product, change in trends.items():
+                if change is None:
+                    continue
+                try:
+                    change_value = float(change)
+                except (TypeError, ValueError):
+                    continue
+
+                direction = "up" if change_value > 0 else "down"
+                trend_parts.append(
+                    f"{product.replace('_', ' ')} is {direction} "
+                    f"{abs(change_value):.0%}"
+                )
+
+        elif isinstance(trends, list):
+            for trend in trends:
+                if not isinstance(trend, str):
+                    continue
+
+                cleaned = trend.replace("_demand_", " demand ")
+                cleaned = cleaned.replace("_", " ")
+
+                if "_+" in trend:
+                    product, change = trend.rsplit("_+", 1)
+                    product = product.replace("_demand", " demand").replace("_", " ")
+                    trend_parts.append(f"{product} is up {change}%")
+                elif "_-" in trend:
+                    product, change = trend.rsplit("_-", 1)
+                    product = product.replace("_demand", " demand").replace("_", " ")
+                    trend_parts.append(f"{product} is down {change}%")
+                else:
+                    trend_parts.append(cleaned)
+
+        trend_text = ", ".join(trend_parts[:4])
+
+        body = f"{merchant_name}, {season or 'seasonal'} demand is shifting"
+
+        if trend_text:
+            body += f": {trend_text}."
+
+        if shelf_action:
+            body += (
+                " I'd move the stronger seasonal products into counter visibility."
+            )
+
+        body += (
+            f" Want me to turn these shifts into a concrete plan for your "
+            f"{category_name} business?"
+        )
+
+        return (
+            body,
+            "open_ended",
+            "vera_category_seasonal_v2",
+            [
+                merchant_name,
+                str(season),
+                str(trends),
+                str(shelf_action),
+            ],
+        )
+
     # ---- Safe generic fallback ----
 
     body = (
@@ -535,6 +701,15 @@ async def tick(body: TickBody):
 
         if not trigger:
             continue
+
+        # Accept the canonical trigger object directly, while also tolerating
+        # a wrapper where the complete trigger was placed inside payload.
+        if (
+            not trigger.get("merchant_id")
+            and isinstance(trigger.get("payload"), dict)
+            and trigger["payload"].get("merchant_id")
+        ):
+            trigger = trigger["payload"]
 
         urgency = int(trigger.get("urgency", 1) or 1)
 
