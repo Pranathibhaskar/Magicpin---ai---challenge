@@ -471,6 +471,42 @@ def compose_proactive_message(
             [merchant_name, category_name],
         )
 
+    if kind == "review_theme_emerged":
+        theme = payload.get("theme")
+        occurrences = payload.get("occurrences_30d")
+        trend = payload.get("trend")
+        common_quote = payload.get("common_quote")
+
+        detail_parts = []
+
+        if occurrences is not None and theme:
+            detail_parts.append(
+                f"{occurrences} reviews in the last 30 days mention {theme.replace('_', ' ')}"
+            )
+        elif theme:
+            detail_parts.append(f"reviews are flagging {theme.replace('_', ' ')}")
+
+        if trend:
+            detail_parts.append(f"The trend is {trend}")
+
+        if common_quote:
+            detail_parts.append(f'One customer reported: "{common_quote}"')
+
+        detail_text = ". ".join(detail_parts)
+
+        body = (
+            f"{merchant_name}, {detail_text}. "
+            f"This is worth addressing before it becomes a broader pattern. "
+            f"Want me to suggest what I'd fix first for your {category_name} business?"
+        )
+
+        return (
+            body,
+            "open_ended",
+            "vera_review_theme_v1",
+            [merchant_name, str(theme), str(occurrences), str(trend)],
+        )
+
     # ---- Safe generic fallback ----
 
     body = (
