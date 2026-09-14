@@ -381,7 +381,7 @@ def compose_proactive_message(
             if actionable:
                 body_parts.append(f"{actionable}.")
             body_parts.append(
-                "Want me to summarize what actually matters for your clinic?"
+                f"Want me to break down what you actually need to do for your {category_name} business?"
             )
 
             body = " ".join(body_parts)
